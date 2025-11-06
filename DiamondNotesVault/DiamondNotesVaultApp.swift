@@ -12,7 +12,8 @@ import SwiftData
 struct DiamondNotesVaultApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            Folder.self,
+            Post.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
@@ -25,7 +26,7 @@ struct DiamondNotesVaultApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            FolderListView(parentID: nil)
         }
         .modelContainer(sharedModelContainer)
     }
