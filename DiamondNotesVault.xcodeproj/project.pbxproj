@@ -39,11 +39,23 @@
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
+/* Begin PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+		C091C62B2EBD42BF00B5147A /* Exceptions for "DiamondNotesVault" folder in "Compile Sources" phase from "DiamondNotesVault" target */ = {
+			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
+			buildPhase = C091C5A12EBCF57400B5147A /* Sources */;
+			membershipExceptions = (
+				Assets.xcassets,
+				DiamondNotesVault.entitlements,
+			);
+		};
+/* End PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		C091C5A72EBCF57400B5147A /* DiamondNotesVault */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				C091C5C82EBCF57600B5147A /* Exceptions for "DiamondNotesVault" folder in "DiamondNotesVault" target */,
+				C091C62B2EBD42BF00B5147A /* Exceptions for "DiamondNotesVault" folder in "Compile Sources" phase from "DiamondNotesVault" target */,
 			);
 			path = DiamondNotesVault;
 			sourceTree = "<group>";
