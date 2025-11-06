@@ -70,7 +70,7 @@ final class FileSystemManager: @unchecked Sendable {
     }
 
     /// Save post to markdown file
-    func savePost(_ post: Post, breadcrumb: String) async throws {
+    func savePost(_ post: Post, folder: Folder, breadcrumb: String) async throws {
         let filename = post.generateFilename(breadcrumb: breadcrumb)
         let fileURL = vaultURL.appendingPathComponent(breadcrumb).appendingPathComponent(filename)
 

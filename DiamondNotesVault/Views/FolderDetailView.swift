@@ -21,7 +21,7 @@ struct FolderDetailView: View {
     // Get posts for this folder, sorted by date
     var posts: [Post] {
         allPosts
-            .filter { $0.folderID == folder.id }
+            .filter { $0.folder?.id == folder.id }
             .sorted { $0.dateCreated > $1.dateCreated }
     }
 
@@ -145,7 +145,7 @@ struct AutoTodayEntry: View {
         let newPost = Post(
             title: todayString(),
             content: "",
-            folderID: folder.id
+            folder: folder
         )
         modelContext.insert(newPost)
     }
@@ -157,6 +157,9 @@ struct AutoTodayEntry: View {
 
     let folder = Folder(name: "Personal")
     container.mainContext.insert(folder)
+
+    let post = Post(title: "Sample Post", content: "Test content", folder: folder)
+    container.mainContext.insert(post)
 
     return NavigationStack {
         FolderDetailView(folder: folder)

@@ -90,7 +90,7 @@ struct PostEditorView: View {
     let container = try! ModelContainer(for: Folder.self, Post.self, configurations: config)
 
     let folder = Folder(name: "Personal")
-    let post = Post(title: "Test Post", content: "Sample content", folderID: folder.id)
+    let post = Post(title: "Test Post", content: "Sample content", folder: folder)
 
     container.mainContext.insert(folder)
     container.mainContext.insert(post)

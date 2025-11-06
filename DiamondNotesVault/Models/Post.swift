@@ -10,25 +10,27 @@ import SwiftData
 
 @Model
 final class Post: Identifiable {
-    var id: UUID
-    var title: String
-    var content: String
-    var folderID: UUID
-    var dateCreated: Date
-    var dateModified: Date
+    var id: UUID = UUID()
+    var title: String = ""
+    var content: String = ""
+    var dateCreated: Date = Date()
+    var dateModified: Date = Date()
+
+    // Relationship
+    var folder: Folder?
 
     init(
         id: UUID = UUID(),
         title: String,
         content: String = "",
-        folderID: UUID,
+        folder: Folder? = nil,
         dateCreated: Date = Date(),
         dateModified: Date = Date()
     ) {
         self.id = id
         self.title = title
         self.content = content
-        self.folderID = folderID
+        self.folder = folder
         self.dateCreated = dateCreated
         self.dateModified = dateModified
     }

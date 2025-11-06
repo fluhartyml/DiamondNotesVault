@@ -10,15 +10,15 @@ import SwiftData
 
 @Model
 final class Folder: Identifiable {
-    var id: UUID
-    var name: String
+    var id: UUID = UUID()
+    var name: String = ""
     var parentID: UUID?
-    var displayOrder: Int
-    var dateCreated: Date
-    var dateModified: Date
+    var displayOrder: Int = 0
+    var dateCreated: Date = Date()
+    var dateModified: Date = Date()
 
     // Relationships
-    @Relationship(deleteRule: .cascade)
+    @Relationship(deleteRule: .cascade, inverse: \Post.folder)
     var posts: [Post]?
 
     init(
