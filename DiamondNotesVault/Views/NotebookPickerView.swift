@@ -16,9 +16,9 @@ struct NotebookPickerView: View {
     @State private var notebookToEdit: NotebookMetadata?
     @State private var showCreateBinderSheet = false
     @State private var newBinderName = ""
-    @State private var groupByTags = false  // Toggle for grouped view
-    @State private var showCreateCollectionSheet = false
-    @State private var newCollectionName = ""
+    @State private var groupByTags = false  // Toggle for section view
+    @State private var showCreateSectionSheet = false
+    @State private var newSectionName = ""
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -28,7 +28,7 @@ struct NotebookPickerView: View {
                 if let index = libraryIndex, !index.notebooks.isEmpty {
                     HStack {
                         Toggle(isOn: $groupByTags) {
-                            Label("Show Collections", systemImage: "books.vertical")
+                            Label("Show Sections", systemImage: "books.vertical")
                                 .font(.subheadline)
                         }
                         .toggleStyle(.switch)
@@ -182,11 +182,11 @@ struct NotebookPickerView: View {
                     }
                 }
             }
-            .sheet(isPresented: $showCreateCollectionSheet) {
+            .sheet(isPresented: $showCreateSectionSheet) {
                 NavigationStack {
                     Form {
-                        Section("Collection Name") {
-                            TextField("Enter collection name", text: $newCollectionName)
+                        Section("Section Name") {
+                            TextField("Enter section name", text: $newSectionName)
                                 .autocapitalization(.words)
                         }
 
@@ -194,26 +194,26 @@ struct NotebookPickerView: View {
                             Text("Examples: Fiction, Non-Fiction, Work, Personal, Reference")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                            Text("Collections organize your notebook binders into groups")
+                            Text("Sections are like library shelves that organize your binders")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    .navigationTitle("New Collection")
+                    .navigationTitle("New Section")
                     .navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
                             Button("Cancel") {
-                                newCollectionName = ""
-                                showCreateCollectionSheet = false
+                                newSectionName = ""
+                                showCreateSectionSheet = false
                             }
                         }
 
                         ToolbarItem(placement: .confirmationAction) {
                             Button("Create") {
-                                createNewCollection()
+                                createNewSection()
                             }
-                            .disabled(newCollectionName.trimmingCharacters(in: .whitespaces).isEmpty)
+                            .disabled(newSectionName.trimmingCharacters(in: .whitespaces).isEmpty)
                         }
                     }
                 }
@@ -323,13 +323,13 @@ struct NotebookPickerView: View {
     @ViewBuilder
     private func groupedBindersView(index: LibraryIndex) -> some View {
         let grouped = Dictionary(grouping: index.notebooks) { notebook -> String in
-            // Group by first tag (Collection), or "General Collection" if no tags
-            notebook.tags.first ?? "General Collection"
+            // Group by first tag (Section), or "General Section" if no tags
+            notebook.tags.first ?? "General Section"
         }
 
-        // Create Collection button
+        // Create Section button
         Button {
-            showCreateCollectionSheet = true
+            showCreateSectionSheet = true
         } label: {
             HStack {
                 Image(systemName: "plus.circle.fill")
@@ -337,10 +337,10 @@ struct NotebookPickerView: View {
                     .font(.system(size: 32))
 
                 VStack(alignment: .leading) {
-                    Text("Create New Collection")
+                    Text("Create New Section")
                         .font(.headline)
                         .foregroundStyle(.primary)
-                    Text("Add a new collection to organize binders")
+                    Text("Add a new section to organize binders")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -353,19 +353,19 @@ struct NotebookPickerView: View {
         }
         .buttonStyle(.plain)
 
-        ForEach(grouped.keys.sorted(), id: \.self) { collectionName in
+        ForEach(grouped.keys.sorted(), id: \.self) { sectionName in
             VStack(alignment: .leading, spacing: 8) {
-                // Collection Header (like library shelf label)
+                // Section Header (like library shelf label)
                 HStack {
                     Image(systemName: "books.vertical.fill")
                         .foregroundStyle(.brown)
                         .font(.system(size: 24))
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(collectionName)
+                        Text(sectionName)
                             .font(.title3)
                             .fontWeight(.semibold)
-                        Text("\(grouped[collectionName]?.count ?? 0) binders")
+                        Text("\(grouped[sectionName]?.count ?? 0) binders")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -381,8 +381,8 @@ struct NotebookPickerView: View {
                 )
                 .cornerRadius(10)
 
-                // Binders in this collection (books on the shelf)
-                ForEach(grouped[collectionName] ?? []) { notebook in
+                // Binders in this section (books on the shelf)
+                ForEach(grouped[sectionName] ?? []) { notebook in
                     HStack(spacing: 12) {
                         // Indent to show hierarchy
                         Rectangle()
@@ -442,17 +442,17 @@ struct NotebookPickerView: View {
         }
     }
 
-    private func createNewCollection() {
+    private func createNewSection() {
         guard let parentURL = getParentLibraryURL() else {
             print("No parent library URL")
             return
         }
 
-        let trimmedName = newCollectionName.trimmingCharacters(in: .whitespaces)
+        let trimmedName = newSectionName.trimmingCharacters(in: .whitespaces)
         guard !trimmedName.isEmpty else { return }
 
-        // Create a new binder in this collection
-        // The binder name will be "[Collection] Binder 1"
+        // Create a new binder in this section
+        // The binder name will be "[Section] Binder 1"
         let binderName = "\(trimmedName) Binder 1"
         let newBinderURL = parentURL.appendingPathComponent(binderName)
 
@@ -469,7 +469,7 @@ struct NotebookPickerView: View {
             // Rebuild index to include new binder
             rebuildIndex()
 
-            // Find the newly created binder in the index and set its collection tag
+            // Find the newly created binder in the index and set its section tag
             if let index = libraryIndex,
                let newNotebook = index.notebooks.first(where: { $0.id == binderName }) {
                 do {
@@ -478,27 +478,27 @@ struct NotebookPickerView: View {
                         notebookID: newNotebook.id,
                         displayName: newNotebook.displayName,
                         description: newNotebook.description,
-                        tags: [trimmedName], // Set collection as first tag
+                        tags: [trimmedName], // Set section as first tag
                         icon: newNotebook.icon,
                         color: newNotebook.color
                     )
 
                     // Reload index to reflect changes
                     libraryIndex = try indexManager.loadLibraryIndex(libraryURL: parentURL)
-                    print("Created new collection '\(trimmedName)' with first binder")
+                    print("Created new section '\(trimmedName)' with first binder")
                 } catch {
-                    print("Failed to set collection tag: \(error)")
+                    print("Failed to set section tag: \(error)")
                 }
             }
 
-            // Close sheet (but keep picker open to show new collection)
-            newCollectionName = ""
-            showCreateCollectionSheet = false
+            // Close sheet (but keep picker open to show new section)
+            newSectionName = ""
+            showCreateSectionSheet = false
 
-            // Enable grouped view to show the new collection
+            // Enable grouped view to show the new section
             groupByTags = true
         } catch {
-            print("Failed to create collection: \(error)")
+            print("Failed to create section: \(error)")
         }
     }
 }

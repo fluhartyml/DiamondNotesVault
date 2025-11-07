@@ -41,13 +41,16 @@ struct NotebookMetadataEditor: View {
                         .frame(minHeight: 80)
                 }
 
-                Section("Collections") {
-                    TextField("Comma-separated collections", text: $tagsText)
+                Section("Organization") {
+                    TextField("Comma-separated tags", text: $tagsText)
                         .autocapitalization(.words)
-                    Text("First tag = collection name (e.g., Fiction, Work, Personal)")
+                    Text("First tag = Section (e.g., Fiction, Non-Fiction, Work)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text("Additional tags for sub-categories (e.g., Romance, Projects)")
+                    Text("Second tag = Collection (e.g., Sci-Fi, Technology, Projects)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text("Additional tags = Keywords (e.g., Romance, AI, Biography)")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
