@@ -14,7 +14,11 @@ struct RichTextEditor: UIViewRepresentable {
 
     var placeholder: String = "Start writing..."
     var onFormatChange: ((TextFormatting) -> Void)?
-    var toolbarView: UIView?
+    var onBold: (() -> Void)?
+    var onItalic: (() -> Void)?
+    var onUnderline: (() -> Void)?
+    var onPhoto: (() -> Void)?
+    var onCamera: (() -> Void)?
 
     func makeUIView(context: Context) -> UITextView {
         let textView = UITextView()
@@ -29,10 +33,8 @@ struct RichTextEditor: UIViewRepresentable {
         textView.keyboardType = .default
         textView.textColor = .label
 
-        // Set the toolbar as inputAccessoryView (rides above keyboard)
-        if let toolbarView = toolbarView {
-            textView.inputAccessoryView = toolbarView
-        }
+        // Create and attach toolbar (only for THIS text view)
+        textView.inputAccessoryView = createToolbar(for: context.coordinator)
 
         return textView
     }
@@ -53,6 +55,68 @@ struct RichTextEditor: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
+    }
+
+    private func createToolbar(for coordinator: Coordinator) -> UIView {
+        // Create toolbar container
+        let toolbarView = UIView(frame: CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 60))
+        toolbarView.backgroundColor = .systemBackground
+        toolbarView.autoresizingMask = [.flexibleWidth]
+
+        // Add top border
+        let border = UIView(frame: CGRect(x: 0, y: 0, width: toolbarView.frame.width, height: 0.5))
+        border.backgroundColor = .separator
+        border.autoresizingMask = [.flexibleWidth]
+        toolbarView.addSubview(border)
+
+        // Create button stack
+        let stackView = UIStackView()
+        stackView.axis = .horizontal
+        stackView.distribution = .equalSpacing
+        stackView.alignment = .center
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+
+        // Create toolbar buttons with actions
+        let buttons: [(String, (() -> Void)?)] = [
+            ("bold", onBold),
+            ("italic", onItalic),
+            ("underline", onUnderline),
+            ("list.bullet", nil), // TODO
+            ("list.number", nil), // TODO
+            ("checklist", nil), // TODO
+            ("photo", onPhoto),
+            ("camera", onCamera)
+        ]
+
+        for (icon, action) in buttons {
+            let button = UIButton(type: .system)
+            let config = UIImage.SymbolConfiguration(pointSize: 20)
+            button.setImage(UIImage(systemName: icon, withConfiguration: config), for: .normal)
+            button.tintColor = .label
+
+            if let action = action {
+                button.addAction(UIAction { _ in action() }, for: .touchUpInside)
+            } else {
+                button.isEnabled = false
+                button.tintColor = .systemGray
+            }
+
+            button.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                button.widthAnchor.constraint(equalToConstant: 44),
+                button.heightAnchor.constraint(equalToConstant: 44)
+            ])
+            stackView.addArrangedSubview(button)
+        }
+
+        toolbarView.addSubview(stackView)
+        NSLayoutConstraint.activate([
+            stackView.leadingAnchor.constraint(equalTo: toolbarView.leadingAnchor, constant: 16),
+            stackView.trailingAnchor.constraint(equalTo: toolbarView.trailingAnchor, constant: -16),
+            stackView.centerYAnchor.constraint(equalTo: toolbarView.centerYAnchor)
+        ])
+
+        return toolbarView
     }
 
     class Coordinator: NSObject, UITextViewDelegate {
