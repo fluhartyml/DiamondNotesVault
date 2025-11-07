@@ -109,8 +109,14 @@ struct EditorView: View {
                 Button {
                     showNotebookPicker = true
                 } label: {
-                    Label(appState.libraryName ?? "Notebook Binder", systemImage: "folder")
-                        .font(.subheadline)
+                    HStack(spacing: 4) {
+                        Image(systemName: "chevron.left")
+                            .font(.caption.weight(.semibold))
+                        Image(systemName: "book.closed.fill")
+                            .font(.subheadline)
+                        Text(appState.libraryName ?? "Notebook Binder")
+                            .font(.subheadline)
+                    }
                 }
             }
 
