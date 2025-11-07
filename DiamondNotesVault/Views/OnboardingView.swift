@@ -28,6 +28,7 @@ struct OnboardingView: View {
     @State private var selectedNotebook: URL?
     @State private var showCreateBinderSheet = false
     @State private var newBinderName = ""
+    @State private var accessingURLs: [URL] = []  // Track URLs we're accessing for cleanup
 
     var body: some View {
         NavigationStack {
@@ -51,6 +52,12 @@ struct OnboardingView: View {
         }
         .onChange(of: selectedLocation) { _, newLocation in
             if mode == .existingFolder, let location = newLocation {
+                // Security-scoped resource access is already started in DocumentPicker
+                // Track this URL so we can stop accessing later
+                if !accessingURLs.contains(location) {
+                    accessingURLs.append(location)
+                }
+
                 // When folder selected, scan for notebook binders
                 scanForNotebookBinders(in: location)
                 mode = .selectNotebookBinder
@@ -88,6 +95,13 @@ struct OnboardingView: View {
                     }
                 }
             }
+        }
+        .onDisappear {
+            // Clean up security-scoped resource access
+            for url in accessingURLs {
+                url.stopAccessingSecurityScopedResource()
+            }
+            accessingURLs.removeAll()
         }
     }
 
@@ -402,9 +416,24 @@ struct OnboardingView: View {
 
     private func scanForNotebookBinders(in libraryURL: URL) {
         print("DEBUG: Scanning for notebook binders in: \(libraryURL.path)")
+        print("DEBUG: libraryURL is security-scoped: \(libraryURL.startAccessingSecurityScopedResource())")
+        // If we just started accessing, we need to balance with a stop later
+        // But actually it was already started in DocumentPicker, so this returns false
+
+        // Check if we can read the directory
+        let fileManager = FileManager.default
+        var isDir: ObjCBool = false
+        let exists = fileManager.fileExists(atPath: libraryURL.path, isDirectory: &isDir)
+        print("DEBUG: Path exists: \(exists), isDirectory: \(isDir.boolValue)")
+
+        guard exists && isDir.boolValue else {
+            print("DEBUG: ERROR - Path doesn't exist or is not a directory!")
+            availableNotebooks = []
+            return
+        }
 
         do {
-            let contents = try FileManager.default.contentsOfDirectory(
+            let contents = try fileManager.contentsOfDirectory(
                 at: libraryURL,
                 includingPropertiesForKeys: [.isDirectoryKey],
                 options: [.skipsHiddenFiles]
@@ -414,7 +443,7 @@ struct OnboardingView: View {
 
             availableNotebooks = contents.filter { url in
                 var isDirectory: ObjCBool = false
-                FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
+                fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory)
                 let isDir = isDirectory.boolValue
                 let notMedia = url.lastPathComponent != "media"
                 print("DEBUG: \(url.lastPathComponent) - isDirectory: \(isDir), notMedia: \(notMedia)")
@@ -427,6 +456,7 @@ struct OnboardingView: View {
             }
         } catch {
             print("DEBUG: Failed to scan for notebook binders: \(error)")
+            print("DEBUG: Error details: \(error.localizedDescription)")
             availableNotebooks = []
         }
     }
