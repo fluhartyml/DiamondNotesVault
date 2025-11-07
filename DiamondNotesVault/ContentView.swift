@@ -61,17 +61,23 @@ struct ContentView: View {
     }
 
     private func loadLastNote() {
+        print("DEBUG: loadLastNote called")
+
         guard let noteURL = appState.lastEditedNoteURL else {
+            print("DEBUG: No lastEditedNoteURL, starting with blank note")
             return
         }
+
+        print("DEBUG: Loading note from: \(noteURL.path)")
 
         do {
             let (title, content) = try fileManager.loadNote(from: noteURL)
             noteTitle = title
             noteContent = content
             appState.currentNoteURL = noteURL
+            print("DEBUG: Note loaded successfully - title: '\(title)', content length: \(content.length)")
         } catch {
-            print("Failed to load note: \(error)")
+            print("DEBUG: Failed to load note: \(error)")
         }
     }
 
@@ -119,18 +125,27 @@ struct ContentView: View {
     }
 
     private func finalizeNote(title: String, content: NSAttributedString) {
-        // Save the current note
-        saveNote(title: title, content: content)
+        print("DEBUG: finalizeNote called in ContentView")
+        print("DEBUG: Title to save = '\(title)'")
+        print("DEBUG: Content length = \(content.length)")
 
-        // Clear current note state to start fresh
+        // Save the current note one final time
+        saveNote(title: title, content: content)
+        print("DEBUG: saveNote completed")
+
+        // Clear current note URL to signal we're starting a new note
+        // Keep lastEditedNoteURL pointing to the saved note for history
+        print("DEBUG: Clearing currentNoteURL but keeping lastEditedNoteURL")
+        let finalizedNoteURL = appState.currentNoteURL
         appState.currentNoteURL = nil
-        appState.lastEditedNoteURL = nil
+        // Don't clear lastEditedNoteURL - it points to the finalized note
 
         // Reset editor to new note with auto-populated date
+        print("DEBUG: Resetting noteTitle and noteContent")
         noteTitle = ""
         noteContent = NSAttributedString()
 
-        print("Note finalized and editor reset for new note")
+        print("DEBUG: Note finalized (saved at \(finalizedNoteURL?.path ?? "unknown")), editor reset for new note")
     }
 }
 

@@ -17,9 +17,11 @@ class FileSystemManager {
     // MARK: - File Operations
 
     /// Save note content to markdown file with media handling
+    /// Images are saved to the notebook's media/ pocket folder
     func saveNote(title: String, attributedContent: NSAttributedString, to fileURL: URL) throws {
-        // Get notebook directory (parent of note file)
+        // Get notebook/binder directory (parent of note file)
         let notebookURL = fileURL.deletingLastPathComponent()
+        // Each notebook has its own media/ pocket folder for images/videos
         let mediaURL = notebookURL.appendingPathComponent("media")
 
         // Ensure directories exist

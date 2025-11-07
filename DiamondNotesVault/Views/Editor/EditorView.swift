@@ -24,8 +24,11 @@ struct EditorView: View {
     @State private var permissionAlertMessage = ""
     @State private var showTextFormatMenu = false
     @State private var showAttachmentMenu = false
+    @State private var isDoneButtonTapped = false
+    @State private var showNotebookPicker = false
 
     @State private var permissionManager = PermissionManager()
+    @State private var appState = AppState.shared
 
     @FocusState private var titleFocused: Bool
     @Environment(\.dismiss) private var dismiss
@@ -70,17 +73,18 @@ struct EditorView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Title field
-            TextField("", text: $title, prompt: Text("Title"), axis: .vertical)
+            TextField("", text: $title, prompt: Text("Title"))
                 .font(.title2.bold())
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
                 .focused($titleFocused)
-                .lineLimit(1...3)
                 .submitLabel(.done)
                 .onSubmit {
+                    print("DEBUG: Title field onSubmit triggered")
                     // When user presses return, move focus to body editor
                     titleFocused = false
                     shouldFocusBody = true
+                    print("DEBUG: Set shouldFocusBody = true")
                 }
 
             Divider()
@@ -101,18 +105,45 @@ struct EditorView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button {
+                    showNotebookPicker = true
+                } label: {
+                    Label(appState.libraryName ?? "Notebook Binder", systemImage: "folder")
+                        .font(.subheadline)
+                }
+            }
+
+            ToolbarItem(placement: .primaryAction) {
                 Button("Done") {
-                    print("DEBUG: Done button tapped")
+                    // Prevent multiple rapid-fire calls
+                    guard !isDoneButtonTapped else {
+                        print("DEBUG: Done button already processing, ignoring")
+                        return
+                    }
+                    isDoneButtonTapped = true
+
+                    print("DEBUG: Done button action triggered")
+                    print("DEBUG: Title = '\(title)'")
+                    print("DEBUG: Content length = \(attributedContent.length)")
 
                     // Hide keyboard
                     titleFocused = false
                     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
 
-                    // Finalize the note (save and close)
-                    print("DEBUG: Calling onDone callback")
-                    onDone?(title, attributedContent)
-                    print("DEBUG: onDone callback completed")
+                    // Finalize the note
+                    if let onDone = onDone {
+                        print("DEBUG: onDone callback exists, calling it now")
+                        onDone(title, attributedContent)
+                        print("DEBUG: onDone callback completed")
+                    } else {
+                        print("DEBUG: ERROR - onDone callback is nil!")
+                    }
+
+                    // Reset flag after a delay
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        isDoneButtonTapped = false
+                    }
                 }
             }
         }
@@ -168,6 +199,9 @@ struct EditorView: View {
             Button("Take Photo") { handleCameraButtonTap() }
             Button("Scan Document") { showDocumentScanner = true }
             Button("Cancel", role: .cancel) { }
+        }
+        .sheet(isPresented: $showNotebookPicker) {
+            NotebookPickerView(appState: appState)
         }
         .onChange(of: selectedPhotos) { _, newPhotos in
             Task {

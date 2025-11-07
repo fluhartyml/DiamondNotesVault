@@ -21,7 +21,13 @@ struct OnboardingView: View {
         case choice
         case newLibrary
         case existingFolder
+        case selectNotebookBinder  // New step: select notebook binder within library
     }
+
+    @State private var availableNotebooks: [URL] = []
+    @State private var selectedNotebook: URL?
+    @State private var showCreateBinderSheet = false
+    @State private var newBinderName = ""
 
     var body: some View {
         NavigationStack {
@@ -30,8 +36,10 @@ struct OnboardingView: View {
                     choiceView
                 } else if mode == .newLibrary {
                     newLibraryView
-                } else {
+                } else if mode == .existingFolder {
                     existingFolderView
+                } else if mode == .selectNotebookBinder {
+                    selectNotebookBinderView
                 }
             }
             .padding()
@@ -40,6 +48,46 @@ struct OnboardingView: View {
         }
         .sheet(isPresented: $showLocationPicker) {
             DocumentPicker(selectedURL: $selectedLocation)
+        }
+        .onChange(of: selectedLocation) { _, newLocation in
+            if mode == .existingFolder, let location = newLocation {
+                // When folder selected, scan for notebook binders
+                scanForNotebookBinders(in: location)
+                mode = .selectNotebookBinder
+            }
+        }
+        .sheet(isPresented: $showCreateBinderSheet) {
+            NavigationStack {
+                Form {
+                    Section("Notebook Binder Name") {
+                        TextField("Enter name", text: $newBinderName)
+                            .autocapitalization(.words)
+                    }
+
+                    Section {
+                        Text("Examples: Work, Personal, Projects, Archive")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .navigationTitle("New Notebook Binder")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") {
+                            newBinderName = ""
+                            showCreateBinderSheet = false
+                        }
+                    }
+
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Create") {
+                            createNewBinderDuringOnboarding()
+                        }
+                        .disabled(newBinderName.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
+                }
+            }
         }
     }
 
@@ -156,8 +204,13 @@ struct OnboardingView: View {
 
     private var existingFolderView: some View {
         VStack(spacing: 30) {
-            Text("Use Existing Folder")
+            Text("Select Library Folder")
                 .font(.title2)
+
+            Text("Choose the parent folder containing your notebook binders")
+                .font(.body)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
 
             if let location = selectedLocation {
                 VStack(spacing: 10) {
@@ -171,6 +224,11 @@ struct OnboardingView: View {
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
+
+                    Text("Next: Choose a notebook binder inside this folder")
+                        .font(.caption)
+                        .foregroundStyle(.blue)
+                        .padding(.top, 8)
                 }
                 .padding()
                 .background(Color.secondary.opacity(0.1))
@@ -190,16 +248,9 @@ struct OnboardingView: View {
             HStack {
                 Button("Back") {
                     mode = .choice
+                    selectedLocation = nil
                 }
                 .buttonStyle(.bordered)
-
-                Spacer()
-
-                Button("Use This Folder") {
-                    useExistingFolder()
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(selectedLocation == nil)
             }
         }
     }
@@ -226,18 +277,211 @@ struct OnboardingView: View {
         }
     }
 
-    private func useExistingFolder() {
-        guard let libraryURL = selectedLocation else { return }
+    // MARK: - Select Notebook Binder View
 
-        // Use the folder name as library name
-        let libraryName = libraryURL.lastPathComponent
+    private var selectNotebookBinderView: some View {
+        VStack(spacing: 30) {
+            Text("Select Notebook Binder")
+                .font(.title2)
 
-        // Save to app state (folder already exists, no need to create)
-        appState.saveLibraryConfiguration(name: libraryName, url: libraryURL)
+            if availableNotebooks.isEmpty {
+                VStack(spacing: 20) {
+                    Image(systemName: "book.closed")
+                        .font(.system(size: 60))
+                        .foregroundStyle(.orange)
+
+                    Text("No Notebook Binders Found")
+                        .font(.headline)
+
+                    Text("This library folder doesn't contain any subfolders to use as notebook binders.")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Create your first binder:")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                        Text("• Tap 'Create New Binder' below")
+                        Text("• Or tap 'Back' to choose a different library")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding()
+                    .background(Color.orange.opacity(0.1))
+                    .cornerRadius(10)
+
+                    Button {
+                        showCreateBinderSheet = true
+                    } label: {
+                        Label("Create New Notebook Binder", systemImage: "plus.circle.fill")
+                            .font(.headline)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+                }
+            } else {
+                ScrollView {
+                    VStack(spacing: 12) {
+                        // Create New Binder Button
+                        Button {
+                            showCreateBinderSheet = true
+                        } label: {
+                            HStack {
+                                Image(systemName: "plus.circle.fill")
+                                    .foregroundStyle(.green)
+                                    .font(.system(size: 32))
+
+                                VStack(alignment: .leading) {
+                                    Text("Create New Notebook Binder")
+                                        .font(.headline)
+                                        .foregroundStyle(.primary)
+                                    Text("Add a new binder to organize your notes")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                Spacer()
+                            }
+                            .padding()
+                            .background(Color.green.opacity(0.1))
+                            .cornerRadius(12)
+                        }
+                        .buttonStyle(.plain)
+
+                        ForEach(availableNotebooks, id: \.self) { notebook in
+                            Button {
+                                selectedNotebook = notebook
+                            } label: {
+                                HStack {
+                                    Image(systemName: "book.closed.fill")
+                                        .foregroundStyle(.blue)
+                                    Text(notebook.lastPathComponent)
+                                        .font(.body)
+                                    Spacer()
+                                    if selectedNotebook == notebook {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(.blue)
+                                    }
+                                }
+                                .padding()
+                                .background(selectedNotebook == notebook ? Color.blue.opacity(0.1) : Color.secondary.opacity(0.1))
+                                .cornerRadius(10)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+
+            Spacer()
+
+            HStack {
+                Button("Back") {
+                    mode = .existingFolder
+                    selectedNotebook = nil
+                    availableNotebooks = []
+                }
+                .buttonStyle(.bordered)
+
+                Spacer()
+
+                // Only show the Use button if a binder is selected
+                if selectedNotebook != nil {
+                    Button("Use This Notebook Binder") {
+                        useSelectedNotebookBinder()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+            }
+        }
+    }
+
+    // MARK: - Actions
+
+    private func scanForNotebookBinders(in libraryURL: URL) {
+        print("DEBUG: Scanning for notebook binders in: \(libraryURL.path)")
+
+        do {
+            let contents = try FileManager.default.contentsOfDirectory(
+                at: libraryURL,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )
+
+            print("DEBUG: Found \(contents.count) total items in folder")
+
+            availableNotebooks = contents.filter { url in
+                var isDirectory: ObjCBool = false
+                FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
+                let isDir = isDirectory.boolValue
+                let notMedia = url.lastPathComponent != "media"
+                print("DEBUG: \(url.lastPathComponent) - isDirectory: \(isDir), notMedia: \(notMedia)")
+                return isDir && notMedia
+            }
+
+            print("DEBUG: Found \(availableNotebooks.count) notebook binders in \(libraryURL.lastPathComponent)")
+            for notebook in availableNotebooks {
+                print("DEBUG:   - \(notebook.lastPathComponent)")
+            }
+        } catch {
+            print("DEBUG: Failed to scan for notebook binders: \(error)")
+            availableNotebooks = []
+        }
+    }
+
+    private func useSelectedNotebookBinder() {
+        guard let notebookURL = selectedNotebook else { return }
+
+        // Use the notebook binder name as library name
+        let notebookName = notebookURL.lastPathComponent
+
+        // Get parent library URL
+        let parentURL = selectedLocation
+
+        // Save to app state with parent library URL
+        appState.saveLibraryConfiguration(name: notebookName, url: notebookURL, parentURL: parentURL)
 
         // Dismiss onboarding
         dismiss()
     }
+
+    private func createNewBinderDuringOnboarding() {
+        guard let parentURL = selectedLocation else {
+            print("No parent library URL")
+            return
+        }
+
+        let trimmedName = newBinderName.trimmingCharacters(in: .whitespaces)
+        guard !trimmedName.isEmpty else { return }
+
+        let newBinderURL = parentURL.appendingPathComponent(trimmedName)
+
+        do {
+            // Create the directory
+            try FileManager.default.createDirectory(at: newBinderURL, withIntermediateDirectories: true)
+            print("Created new notebook binder: \(newBinderURL.path)")
+
+            // Create media folder inside it
+            let mediaURL = newBinderURL.appendingPathComponent("media")
+            try FileManager.default.createDirectory(at: mediaURL, withIntermediateDirectories: true)
+            print("Created media folder: \(mediaURL.path)")
+
+            // Save to app state and complete onboarding
+            appState.saveLibraryConfiguration(name: trimmedName, url: newBinderURL, parentURL: parentURL)
+
+            // Close sheet and dismiss onboarding
+            newBinderName = ""
+            showCreateBinderSheet = false
+            dismiss()
+        } catch {
+            print("Failed to create notebook binder: \(error)")
+        }
+    }
+
+    // REMOVED: useExistingFolder() - Users must now select a notebook within the library
+    // The onChange(of: selectedLocation) handler automatically proceeds to notebook selection
 }
 
 // MARK: - Document Picker
@@ -267,7 +511,17 @@ struct DocumentPicker: UIViewControllerRepresentable {
         }
 
         func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
-            parent.selectedURL = urls.first
+            guard let url = urls.first else { return }
+
+            // Start accessing security-scoped resource
+            guard url.startAccessingSecurityScopedResource() else {
+                print("ERROR: Failed to access security-scoped resource: \(url.path)")
+                parent.dismiss()
+                return
+            }
+
+            print("DEBUG: Successfully started accessing security-scoped resource: \(url.path)")
+            parent.selectedURL = url
             parent.dismiss()
         }
 
