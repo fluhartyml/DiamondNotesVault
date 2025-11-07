@@ -17,6 +17,8 @@ struct NotebookPickerView: View {
     @State private var showCreateBinderSheet = false
     @State private var newBinderName = ""
     @State private var groupByTags = false  // Toggle for grouped view
+    @State private var showCreateCollectionSheet = false
+    @State private var newCollectionName = ""
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -26,7 +28,7 @@ struct NotebookPickerView: View {
                 if let index = libraryIndex, !index.notebooks.isEmpty {
                     HStack {
                         Toggle(isOn: $groupByTags) {
-                            Label("Show Sections", systemImage: "books.vertical")
+                            Label("Show Collections", systemImage: "books.vertical")
                                 .font(.subheadline)
                         }
                         .toggleStyle(.switch)
@@ -180,6 +182,42 @@ struct NotebookPickerView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showCreateCollectionSheet) {
+                NavigationStack {
+                    Form {
+                        Section("Collection Name") {
+                            TextField("Enter collection name", text: $newCollectionName)
+                                .autocapitalization(.words)
+                        }
+
+                        Section {
+                            Text("Examples: Fiction, Non-Fiction, Work, Personal, Reference")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text("Collections organize your notebook binders into groups")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .navigationTitle("New Collection")
+                    .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("Cancel") {
+                                newCollectionName = ""
+                                showCreateCollectionSheet = false
+                            }
+                        }
+
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Create") {
+                                createNewCollection()
+                            }
+                            .disabled(newCollectionName.trimmingCharacters(in: .whitespaces).isEmpty)
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -285,23 +323,49 @@ struct NotebookPickerView: View {
     @ViewBuilder
     private func groupedBindersView(index: LibraryIndex) -> some View {
         let grouped = Dictionary(grouping: index.notebooks) { notebook -> String in
-            // Group by first tag (Section), or "General Collection" if no tags
+            // Group by first tag (Collection), or "General Collection" if no tags
             notebook.tags.first ?? "General Collection"
         }
 
-        ForEach(grouped.keys.sorted(), id: \.self) { sectionName in
+        // Create Collection button
+        Button {
+            showCreateCollectionSheet = true
+        } label: {
+            HStack {
+                Image(systemName: "plus.circle.fill")
+                    .foregroundStyle(.green)
+                    .font(.system(size: 32))
+
+                VStack(alignment: .leading) {
+                    Text("Create New Collection")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    Text("Add a new collection to organize binders")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+            }
+            .padding()
+            .background(Color.green.opacity(0.1))
+            .cornerRadius(12)
+        }
+        .buttonStyle(.plain)
+
+        ForEach(grouped.keys.sorted(), id: \.self) { collectionName in
             VStack(alignment: .leading, spacing: 8) {
-                // Section Header (like library shelf label)
+                // Collection Header (like library shelf label)
                 HStack {
                     Image(systemName: "books.vertical.fill")
                         .foregroundStyle(.brown)
                         .font(.system(size: 24))
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(sectionName)
+                        Text(collectionName)
                             .font(.title3)
                             .fontWeight(.semibold)
-                        Text("\(grouped[sectionName]?.count ?? 0) binders")
+                        Text("\(grouped[collectionName]?.count ?? 0) binders")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -317,8 +381,8 @@ struct NotebookPickerView: View {
                 )
                 .cornerRadius(10)
 
-                // Binders in this section (books on the shelf)
-                ForEach(grouped[sectionName] ?? []) { notebook in
+                // Binders in this collection (books on the shelf)
+                ForEach(grouped[collectionName] ?? []) { notebook in
                     HStack(spacing: 12) {
                         // Indent to show hierarchy
                         Rectangle()
@@ -375,6 +439,66 @@ struct NotebookPickerView: View {
             dismiss()
         } catch {
             print("Failed to create notebook binder: \(error)")
+        }
+    }
+
+    private func createNewCollection() {
+        guard let parentURL = getParentLibraryURL() else {
+            print("No parent library URL")
+            return
+        }
+
+        let trimmedName = newCollectionName.trimmingCharacters(in: .whitespaces)
+        guard !trimmedName.isEmpty else { return }
+
+        // Create a new binder in this collection
+        // The binder name will be "[Collection] Binder 1"
+        let binderName = "\(trimmedName) Binder 1"
+        let newBinderURL = parentURL.appendingPathComponent(binderName)
+
+        do {
+            // Create the directory
+            try FileManager.default.createDirectory(at: newBinderURL, withIntermediateDirectories: true)
+            print("Created new notebook binder: \(newBinderURL.path)")
+
+            // Create media folder inside it
+            let mediaURL = newBinderURL.appendingPathComponent("media")
+            try FileManager.default.createDirectory(at: mediaURL, withIntermediateDirectories: true)
+            print("Created media folder: \(mediaURL.path)")
+
+            // Rebuild index to include new binder
+            rebuildIndex()
+
+            // Find the newly created binder in the index and set its collection tag
+            if let index = libraryIndex,
+               let newNotebook = index.notebooks.first(where: { $0.id == binderName }) {
+                do {
+                    try indexManager.updateNotebookMetadata(
+                        libraryURL: parentURL,
+                        notebookID: newNotebook.id,
+                        displayName: newNotebook.displayName,
+                        description: newNotebook.description,
+                        tags: [trimmedName], // Set collection as first tag
+                        icon: newNotebook.icon,
+                        color: newNotebook.color
+                    )
+
+                    // Reload index to reflect changes
+                    libraryIndex = try indexManager.loadLibraryIndex(libraryURL: parentURL)
+                    print("Created new collection '\(trimmedName)' with first binder")
+                } catch {
+                    print("Failed to set collection tag: \(error)")
+                }
+            }
+
+            // Close sheet (but keep picker open to show new collection)
+            newCollectionName = ""
+            showCreateCollectionSheet = false
+
+            // Enable grouped view to show the new collection
+            groupByTags = true
+        } catch {
+            print("Failed to create collection: \(error)")
         }
     }
 }
