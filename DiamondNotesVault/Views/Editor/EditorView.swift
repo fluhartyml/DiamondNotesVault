@@ -7,12 +7,21 @@
 
 import SwiftUI
 import UIKit
+import PhotosUI
 
 struct EditorView: View {
     @State private var title: String = ""
     @State private var attributedContent: NSAttributedString
     @State private var isEditing: Bool = true
     @State private var currentFormatting = TextFormatting(isBold: false, isItalic: false, isUnderlined: false)
+
+    @State private var showPhotoPicker = false
+    @State private var showCamera = false
+    @State private var selectedPhotos: [PhotosPickerItem] = []
+    @State private var showPermissionAlert = false
+    @State private var permissionAlertMessage = ""
+
+    @State private var permissionManager = PermissionManager()
 
     @FocusState private var titleFocused: Bool
     @Environment(\.dismiss) private var dismiss
@@ -23,14 +32,20 @@ struct EditorView: View {
     init(
         title: String = "",
         content: String = "",
+        attributedContent: NSAttributedString? = nil,
         onSave: @escaping (String, NSAttributedString) -> Void,
         onDelete: @escaping () -> Void
     ) {
         self._title = State(initialValue: title)
 
-        let defaultFont = UIFont.preferredFont(forTextStyle: .body)
-        let attrs: [NSAttributedString.Key: Any] = [.font: defaultFont]
-        self._attributedContent = State(initialValue: NSAttributedString(string: content, attributes: attrs))
+        // Use provided attributed content or create from plain string
+        if let attributed = attributedContent, attributed.length > 0 {
+            self._attributedContent = State(initialValue: attributed)
+        } else {
+            let defaultFont = UIFont.preferredFont(forTextStyle: .body)
+            let attrs: [NSAttributedString.Key: Any] = [.font: defaultFont]
+            self._attributedContent = State(initialValue: NSAttributedString(string: content, attributes: attrs))
+        }
 
         self.onSave = onSave
         self.onDelete = onDelete
@@ -66,8 +81,8 @@ struct EditorView: View {
                     onBulletList: { /* TODO */ },
                     onNumberedList: { /* TODO */ },
                     onCheckbox: { /* TODO */ },
-                    onPhoto: { /* TODO */ },
-                    onCamera: { /* TODO */ }
+                    onPhoto: { handlePhotoButtonTap() },
+                    onCamera: { handleCameraButtonTap() }
                 )
             }
 
@@ -80,6 +95,45 @@ struct EditorView: View {
         }
         .onDisappear {
             saveOrDelete()
+        }
+        .photosPicker(
+            isPresented: $showPhotoPicker,
+            selection: $selectedPhotos,
+            maxSelectionCount: 10,
+            matching: .images
+        )
+        .sheet(isPresented: $showCamera) {
+            CameraView { image in
+                insertImage(image)
+            }
+        }
+        .alert("Permission Required", isPresented: $showPermissionAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Open Settings") {
+                if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(settingsURL)
+                }
+            }
+        } message: {
+            Text(permissionAlertMessage)
+        }
+        .onChange(of: selectedPhotos) { _, newPhotos in
+            Task {
+                for item in newPhotos {
+                    // Extract metadata first (iOS 16+)
+                    var metadata: PhotoMetadata?
+                    if #available(iOS 16.0, *) {
+                        metadata = await PhotoMetadataExtractor.extractMetadata(from: item)
+                    }
+
+                    // Load image
+                    if let data = try? await item.loadTransferable(type: Data.self),
+                       let image = UIImage(data: data) {
+                        insertImage(image, metadata: metadata)
+                    }
+                }
+                selectedPhotos = []
+            }
         }
     }
 
@@ -119,6 +173,62 @@ struct EditorView: View {
                 mutableText.addAttribute(.font, value: newFont, range: range)
             }
         }
+
+        attributedContent = mutableText
+    }
+
+    private func handlePhotoButtonTap() {
+        Task {
+            let hasPermission = await permissionManager.requestPhotoLibraryAccess()
+            if hasPermission {
+                showPhotoPicker = true
+            } else {
+                permissionAlertMessage = "Diamond Notes Vault needs access to your photo library to add photos to your notes. Please enable photo library access in Settings."
+                showPermissionAlert = true
+            }
+        }
+    }
+
+    private func handleCameraButtonTap() {
+        Task {
+            let hasPermission = await permissionManager.requestCameraAccess()
+            if hasPermission {
+                showCamera = true
+            } else {
+                permissionAlertMessage = "Diamond Notes Vault needs access to your camera to take photos for your notes. Please enable camera access in Settings."
+                showPermissionAlert = true
+            }
+        }
+    }
+
+    private func insertImage(_ image: UIImage, metadata: PhotoMetadata? = nil) {
+        // Create text attachment with image
+        let attachment = NSTextAttachment()
+        attachment.image = image
+
+        // Store metadata in attachment for later retrieval
+        if let metadata = metadata {
+            // Store as JSON in attachment's fileType (we'll use this when saving)
+            attachment.fileType = metadata.originalFilename
+        }
+
+        // Scale image to fit within editor width (assuming ~350pt width for iPad)
+        let maxWidth: CGFloat = 350
+        if image.size.width > maxWidth {
+            let scale = maxWidth / image.size.width
+            attachment.bounds = CGRect(x: 0, y: 0, width: maxWidth, height: image.size.height * scale)
+        } else {
+            attachment.bounds = CGRect(x: 0, y: 0, width: image.size.width, height: image.size.height)
+        }
+
+        // Create attributed string with attachment
+        let attachmentString = NSAttributedString(attachment: attachment)
+        let mutableText = NSMutableAttributedString(attributedString: attributedContent)
+
+        // Insert at end with newlines
+        mutableText.append(NSAttributedString(string: "\n"))
+        mutableText.append(attachmentString)
+        mutableText.append(NSAttributedString(string: "\n"))
 
         attributedContent = mutableText
     }
