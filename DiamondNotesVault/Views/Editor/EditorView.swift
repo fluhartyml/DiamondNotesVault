@@ -14,6 +14,7 @@ struct EditorView: View {
     @State private var title: String = ""
     @State private var attributedContent: NSAttributedString
     @State private var currentFormatting = TextFormatting(isBold: false, isItalic: false, isUnderlined: false)
+    @State private var shouldFocusBody = false
 
     @State private var showPhotoPicker = false
     @State private var showCamera = false
@@ -77,8 +78,9 @@ struct EditorView: View {
                 .lineLimit(1...3)
                 .submitLabel(.done)
                 .onSubmit {
-                    // When user presses return, unfocus title (user can tap body to edit)
+                    // When user presses return, move focus to body editor
                     titleFocused = false
+                    shouldFocusBody = true
                 }
 
             Divider()
@@ -86,6 +88,7 @@ struct EditorView: View {
             // Rich text editor with toolbar as inputAccessoryView
             RichTextEditor(
                 attributedText: $attributedContent,
+                shouldBecomeFirstResponder: $shouldFocusBody,
                 onFormatChange: { formatting in
                     currentFormatting = formatting
                 },

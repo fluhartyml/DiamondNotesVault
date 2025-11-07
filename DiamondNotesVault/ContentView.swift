@@ -29,6 +29,7 @@ struct ContentView: View {
                     finalizeNote(title: title, content: content)
                 }
             )
+            .id(appState.currentNoteURL?.path ?? "new-note")  // Force recreation when note changes
             .navigationTitle(appState.libraryName ?? "Note")
         }
         .onAppear {

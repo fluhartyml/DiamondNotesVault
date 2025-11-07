@@ -10,6 +10,7 @@ import UIKit
 
 struct RichTextEditor: UIViewRepresentable {
     @Binding var attributedText: NSAttributedString
+    @Binding var shouldBecomeFirstResponder: Bool
 
     var placeholder: String = "Start writing..."
     var onFormatChange: ((TextFormatting) -> Void)?
@@ -45,8 +46,13 @@ struct RichTextEditor: UIViewRepresentable {
             uiView.selectedRange = selectedRange
         }
 
-        // Let UITextView manage its own first responder status
-        // User taps to focus/unfocus naturally
+        // Handle programmatic focus request
+        if shouldBecomeFirstResponder && !uiView.isFirstResponder {
+            uiView.becomeFirstResponder()
+            DispatchQueue.main.async {
+                shouldBecomeFirstResponder = false
+            }
+        }
     }
 
     func makeCoordinator() -> Coordinator {
