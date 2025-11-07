@@ -10,15 +10,14 @@ import UIKit
 
 struct RichTextEditor: UIViewRepresentable {
     @Binding var attributedText: NSAttributedString
-    @Binding var isFirstResponder: Bool
 
     var placeholder: String = "Start writing..."
     var onFormatChange: ((TextFormatting) -> Void)?
     var onBold: (() -> Void)?
     var onItalic: (() -> Void)?
     var onUnderline: (() -> Void)?
-    var onPhoto: (() -> Void)?
-    var onCamera: (() -> Void)?
+    var onTextFormat: (() -> Void)?  // Aa button
+    var onAttachment: (() -> Void)?  // Paperclip menu (photo/camera/scan)
 
     func makeUIView(context: Context) -> UITextView {
         let textView = UITextView()
@@ -46,11 +45,8 @@ struct RichTextEditor: UIViewRepresentable {
             uiView.selectedRange = selectedRange
         }
 
-        if isFirstResponder && !uiView.isFirstResponder {
-            uiView.becomeFirstResponder()
-        } else if !isFirstResponder && uiView.isFirstResponder {
-            uiView.resignFirstResponder()
-        }
+        // Let UITextView manage its own first responder status
+        // User taps to focus/unfocus naturally
     }
 
     func makeCoordinator() -> Coordinator {
@@ -78,14 +74,14 @@ struct RichTextEditor: UIViewRepresentable {
 
         // Create toolbar buttons with actions
         let buttons: [(String, (() -> Void)?)] = [
+            ("textformat", onTextFormat),  // Aa button
             ("bold", onBold),
             ("italic", onItalic),
             ("underline", onUnderline),
             ("list.bullet", nil), // TODO
             ("list.number", nil), // TODO
             ("checklist", nil), // TODO
-            ("photo", onPhoto),
-            ("camera", onCamera)
+            ("paperclip", onAttachment)  // Unified attachment menu
         ]
 
         for (icon, action) in buttons {
@@ -124,6 +120,16 @@ struct RichTextEditor: UIViewRepresentable {
 
         init(_ parent: RichTextEditor) {
             self.parent = parent
+        }
+
+        func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+            // When user presses return, reset to body text style
+            if text == "\n" {
+                // Set typing attributes to body font for next line
+                let bodyFont = UIFont.preferredFont(forTextStyle: .body)
+                textView.typingAttributes = [.font: bodyFont]
+            }
+            return true
         }
 
         func textViewDidChange(_ textView: UITextView) {

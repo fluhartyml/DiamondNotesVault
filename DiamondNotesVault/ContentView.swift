@@ -24,6 +24,9 @@ struct ContentView: View {
                 },
                 onDelete: {
                     deleteNote()
+                },
+                onDone: { title, content in
+                    finalizeNote(title: title, content: content)
                 }
             )
             .navigationTitle(appState.libraryName ?? "Note")
@@ -112,6 +115,21 @@ struct ContentView: View {
         } catch {
             print("Failed to delete note: \(error)")
         }
+    }
+
+    private func finalizeNote(title: String, content: NSAttributedString) {
+        // Save the current note
+        saveNote(title: title, content: content)
+
+        // Clear current note state to start fresh
+        appState.currentNoteURL = nil
+        appState.lastEditedNoteURL = nil
+
+        // Reset editor to new note with auto-populated date
+        noteTitle = ""
+        noteContent = NSAttributedString()
+
+        print("Note finalized and editor reset for new note")
     }
 }
 
