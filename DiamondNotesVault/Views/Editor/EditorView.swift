@@ -36,7 +36,16 @@ struct EditorView: View {
         onSave: @escaping (String, NSAttributedString) -> Void,
         onDelete: @escaping () -> Void
     ) {
-        self._title = State(initialValue: title)
+        // Auto-populate title with date if empty (new note)
+        if title.isEmpty {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy MMM dd "
+            formatter.locale = Locale(identifier: "en_US_POSIX") // Ensures MMM is always English 3-letter abbreviation
+            let dateString = formatter.string(from: Date()).uppercased() // Convert to uppercase for YYYY MMM DD format
+            self._title = State(initialValue: dateString)
+        } else {
+            self._title = State(initialValue: title)
+        }
 
         // Use provided attributed content or create from plain string
         if let attributed = attributedContent, attributed.length > 0 {
@@ -62,35 +71,29 @@ struct EditorView: View {
 
             Divider()
 
-            // Rich text editor
+            // Rich text editor with toolbar as inputAccessoryView
             RichTextEditor(
                 attributedText: $attributedContent,
                 isFirstResponder: $isEditing,
                 onFormatChange: { formatting in
                     currentFormatting = formatting
-                }
+                },
+                toolbarView: createToolbarView()
             )
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItemGroup(placement: .bottomBar) {
-                EditorToolbar(
-                    onBold: { applyFormatting(.bold) },
-                    onItalic: { applyFormatting(.italic) },
-                    onUnderline: { applyFormatting(.underline) },
-                    onBulletList: { /* TODO */ },
-                    onNumberedList: { /* TODO */ },
-                    onCheckbox: { /* TODO */ },
-                    onPhoto: { handlePhotoButtonTap() },
-                    onCamera: { handleCameraButtonTap() }
-                )
-            }
-
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button("Done") {
                     isEditing = false
                     dismiss()
                 }
+            }
+        }
+        .onAppear {
+            // Auto-focus title field for new notes
+            if !title.isEmpty && title.hasSuffix(" ") {
+                titleFocused = true
             }
         }
         .onDisappear {
@@ -135,6 +138,61 @@ struct EditorView: View {
                 selectedPhotos = []
             }
         }
+    }
+
+    private func createToolbarView() -> UIView {
+        // Create toolbar container
+        let toolbarView = UIView(frame: CGRect(x: 0, y: 0, width: UIScreen.main.bounds.width, height: 60))
+        toolbarView.backgroundColor = .systemBackground
+        toolbarView.autoresizingMask = [.flexibleWidth]
+
+        // Add top border
+        let border = UIView(frame: CGRect(x: 0, y: 0, width: toolbarView.frame.width, height: 0.5))
+        border.backgroundColor = .separator
+        border.autoresizingMask = [.flexibleWidth]
+        toolbarView.addSubview(border)
+
+        // Create button stack
+        let stackView = UIStackView()
+        stackView.axis = .horizontal
+        stackView.distribution = .equalSpacing
+        stackView.alignment = .center
+        stackView.translatesAutoresizingMaskIntoConstraints = false
+
+        // Create toolbar buttons
+        let buttons: [(String, () -> Void)] = [
+            ("bold", { self.applyFormatting(.bold) }),
+            ("italic", { self.applyFormatting(.italic) }),
+            ("underline", { self.applyFormatting(.underline) }),
+            ("list.bullet", { /* TODO */ }),
+            ("list.number", { /* TODO */ }),
+            ("checklist", { /* TODO */ }),
+            ("photo", { self.handlePhotoButtonTap() }),
+            ("camera", { self.handleCameraButtonTap() })
+        ]
+
+        for (icon, action) in buttons {
+            let button = UIButton(type: .system)
+            let config = UIImage.SymbolConfiguration(pointSize: 20)
+            button.setImage(UIImage(systemName: icon, withConfiguration: config), for: .normal)
+            button.tintColor = .label
+            button.addAction(UIAction { _ in action() }, for: .touchUpInside)
+            button.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                button.widthAnchor.constraint(equalToConstant: 44),
+                button.heightAnchor.constraint(equalToConstant: 44)
+            ])
+            stackView.addArrangedSubview(button)
+        }
+
+        toolbarView.addSubview(stackView)
+        NSLayoutConstraint.activate([
+            stackView.leadingAnchor.constraint(equalTo: toolbarView.leadingAnchor, constant: 16),
+            stackView.trailingAnchor.constraint(equalTo: toolbarView.trailingAnchor, constant: -16),
+            stackView.centerYAnchor.constraint(equalTo: toolbarView.centerYAnchor)
+        ])
+
+        return toolbarView
     }
 
     private func applyFormatting(_ style: FormattingStyle) {

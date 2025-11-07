@@ -26,7 +26,7 @@ struct ContentView: View {
                     deleteNote()
                 }
             )
-            .navigationTitle("Note")
+            .navigationTitle(appState.libraryName ?? "Note")
         }
         .onAppear {
             checkOnboarding()

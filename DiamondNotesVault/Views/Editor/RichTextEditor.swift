@@ -14,6 +14,7 @@ struct RichTextEditor: UIViewRepresentable {
 
     var placeholder: String = "Start writing..."
     var onFormatChange: ((TextFormatting) -> Void)?
+    var toolbarView: UIView?
 
     func makeUIView(context: Context) -> UITextView {
         let textView = UITextView()
@@ -27,6 +28,12 @@ struct RichTextEditor: UIViewRepresentable {
         textView.spellCheckingType = .yes
         textView.keyboardType = .default
         textView.textColor = .label
+
+        // Set the toolbar as inputAccessoryView (rides above keyboard)
+        if let toolbarView = toolbarView {
+            textView.inputAccessoryView = toolbarView
+        }
+
         return textView
     }
 
