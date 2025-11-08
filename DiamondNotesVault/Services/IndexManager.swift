@@ -13,6 +13,7 @@
 
 import Foundation
 
+@MainActor
 class IndexManager {
     static let shared = IndexManager()
 

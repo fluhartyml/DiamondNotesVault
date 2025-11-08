@@ -7,6 +7,7 @@
 
 import SwiftUI
 
+@MainActor
 struct NotebookMetadataEditor: View {
     @Binding var notebook: NotebookMetadata
     @Environment(\.dismiss) private var dismiss

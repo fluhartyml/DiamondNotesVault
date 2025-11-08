@@ -71,9 +71,9 @@ struct NotebookPickerView: View {
 
                             // Show grouped or flat view
                             if groupByTags {
-                                groupedBindersView(index: index)
+                                groupedBindersView()
                             } else {
-                                flatBindersView(index: index)
+                                flatBindersView()
                             }
                         }
                         .padding()
@@ -233,6 +233,7 @@ struct NotebookPickerView: View {
         return libraryURL.lastPathComponent == notebook.id
     }
 
+    @MainActor
     private func loadIndex() {
         guard let parentURL = getParentLibraryURL() else {
             print("No library URL configured")
@@ -247,6 +248,7 @@ struct NotebookPickerView: View {
         }
     }
 
+    @MainActor
     private func rebuildIndex() {
         guard let parentURL = getParentLibraryURL() else { return }
 
@@ -286,6 +288,7 @@ struct NotebookPickerView: View {
         dismiss()
     }
 
+    @MainActor
     private func saveNotebookMetadata(_ notebook: NotebookMetadata) {
         guard let parentURL = getParentLibraryURL() else { return }
 
@@ -311,8 +314,9 @@ struct NotebookPickerView: View {
     // MARK: - View Helpers
 
     @ViewBuilder
-    private func flatBindersView(index: LibraryIndex) -> some View {
-        ForEach(index.notebooks) { notebook in
+    private func flatBindersView() -> some View {
+        if let index = libraryIndex {
+            ForEach(index.notebooks) { notebook in
             NotebookCard(
                 notebook: notebook,
                 isSelected: isCurrentNotebook(notebook),
@@ -325,23 +329,26 @@ struct NotebookPickerView: View {
                 }
             )
         }
-        .onDelete { indexSet in
-            deleteNotebooks(at: indexSet, from: index)
-        }
-        .onMove { from, to in
-            moveNotebooks(from: from, to: to, in: index)
+            .onDelete { indexSet in
+                deleteNotebooks(at: indexSet)
+            }
+            .onMove { from, to in
+                moveNotebooks(from: from, to: to)
+            }
         }
     }
 
     @ViewBuilder
-    private func groupedBindersView(index: LibraryIndex) -> some View {
-        let grouped = Dictionary(grouping: index.notebooks) { notebook -> String in
-            // Group by first tag (Section), or "General Section" if no tags
-            notebook.tags.first ?? "General Section"
-        }
+    private func groupedBindersView() -> some View {
+        if let index = libraryIndex {
+            let grouped = Dictionary(grouping: index.notebooks) { notebook -> String in
+                // Group by first tag (Section), or "General Section" if no tags
+                notebook.tags.first ?? "General Section"
+            }
 
-        // Create Section button
-        Button {
+            VStack(spacing: 12) {
+                // Create Section button
+                Button {
             showCreateSectionSheet = true
         } label: {
             HStack {
@@ -417,6 +424,8 @@ struct NotebookPickerView: View {
                 }
             }
         }
+            }
+        }
     }
 
     private func createNewBinder() {
@@ -455,6 +464,7 @@ struct NotebookPickerView: View {
         }
     }
 
+    @MainActor
     private func createNewSection() {
         guard let parentURL = getParentLibraryURL() else {
             print("No parent library URL")
@@ -512,6 +522,58 @@ struct NotebookPickerView: View {
             groupByTags = true
         } catch {
             print("Failed to create section: \(error)")
+        }
+    }
+
+    // MARK: - Edit Mode Actions
+
+    @MainActor
+    private func deleteNotebooks(at offsets: IndexSet) {
+        guard let parentURL = getParentLibraryURL(),
+              let index = libraryIndex else { return }
+
+        // Get notebooks to delete
+        let notebooksToDelete = offsets.map { index.notebooks[$0] }
+
+        do {
+            // Delete each notebook folder
+            for notebook in notebooksToDelete {
+                let notebookURL = parentURL.appendingPathComponent(notebook.id)
+                try FileManager.default.removeItem(at: notebookURL)
+                print("Deleted notebook: \(notebook.displayName)")
+            }
+
+            // Rebuild index after deletion
+            try indexManager.rebuildLibraryIndex(libraryURL: parentURL)
+            libraryIndex = try indexManager.loadLibraryIndex(libraryURL: parentURL)
+        } catch {
+            print("Failed to delete notebooks: \(error)")
+        }
+    }
+
+    @MainActor
+    private func moveNotebooks(from source: IndexSet, to destination: Int) {
+        guard let parentURL = getParentLibraryURL(),
+              let index = libraryIndex else { return }
+
+        // Create mutable copy of notebooks array
+        var updatedNotebooks = index.notebooks
+
+        // Perform the move
+        updatedNotebooks.move(fromOffsets: source, toOffset: destination)
+
+        // Update the library index with new order
+        var updatedIndex = index
+        updatedIndex.notebooks = updatedNotebooks
+        updatedIndex.lastModified = Date()
+
+        do {
+            // Save the reordered index
+            try indexManager.saveLibraryIndex(updatedIndex, to: parentURL)
+            libraryIndex = updatedIndex
+            print("Reordered notebooks")
+        } catch {
+            print("Failed to reorder notebooks: \(error)")
         }
     }
 }
@@ -606,54 +668,6 @@ struct NotebookCard: View {
         case "yellow": return .yellow
         case "gray": return .gray
         default: return .blue
-        }
-    }
-
-    // MARK: - Edit Mode Actions
-
-    private func deleteNotebooks(at offsets: IndexSet, from index: LibraryIndex) {
-        guard let parentURL = getParentLibraryURL() else { return }
-
-        // Get notebooks to delete
-        let notebooksToDelete = offsets.map { index.notebooks[$0] }
-
-        do {
-            // Delete each notebook folder
-            for notebook in notebooksToDelete {
-                let notebookURL = parentURL.appendingPathComponent(notebook.id)
-                try FileManager.default.removeItem(at: notebookURL)
-                print("Deleted notebook: \(notebook.displayName)")
-            }
-
-            // Rebuild index after deletion
-            try indexManager.rebuildLibraryIndex(libraryURL: parentURL)
-            libraryIndex = try indexManager.loadLibraryIndex(libraryURL: parentURL)
-        } catch {
-            print("Failed to delete notebooks: \(error)")
-        }
-    }
-
-    private func moveNotebooks(from source: IndexSet, to destination: Int, in index: LibraryIndex) {
-        guard let parentURL = getParentLibraryURL() else { return }
-
-        // Create mutable copy of notebooks array
-        var updatedNotebooks = index.notebooks
-
-        // Perform the move
-        updatedNotebooks.move(fromOffsets: source, toOffset: destination)
-
-        // Update the library index with new order
-        var updatedIndex = index
-        updatedIndex.notebooks = updatedNotebooks
-        updatedIndex.lastModified = Date()
-
-        do {
-            // Save the reordered index
-            try indexManager.saveLibraryIndex(updatedIndex, to: parentURL)
-            libraryIndex = updatedIndex
-            print("Reordered notebooks")
-        } catch {
-            print("Failed to reorder notebooks: \(error)")
         }
     }
 }

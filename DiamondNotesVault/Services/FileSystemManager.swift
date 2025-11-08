@@ -8,6 +8,7 @@
 import Foundation
 import UIKit
 
+@MainActor
 @Observable
 class FileSystemManager {
     static let shared = FileSystemManager()
@@ -184,7 +185,7 @@ class FileSystemManager {
 
     // MARK: - Markdown Conversion
 
-    private func convertToMarkdown(title: String, attributedContent: NSAttributedString, mediaURL: URL) throws -> String {
+    private func convertToMarkdown(title: String, attributedContent: NSAttributedString, mediaURL: URL, noteUUID: String?) throws -> String {
         var markdown = ""
 
         // Add title as H1
