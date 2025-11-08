@@ -17,7 +17,7 @@ class FileSystemManager {
     // MARK: - File Operations
 
     /// Save note content to markdown file with media handling
-    /// Images are saved to the notebook's media/ pocket folder
+    /// Images are saved to the notebook's media/ pocket folder with UUID prefix
     func saveNote(title: String, attributedContent: NSAttributedString, to fileURL: URL) throws {
         // Get notebook/binder directory (parent of note file)
         let notebookURL = fileURL.deletingLastPathComponent()
@@ -28,8 +28,12 @@ class FileSystemManager {
         try FileManager.default.createDirectory(at: notebookURL, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: mediaURL, withIntermediateDirectories: true)
 
+        // Extract UUID from filename for media prefixing
+        let noteFilename = fileURL.lastPathComponent
+        let noteUUID = extractUUID(from: noteFilename)
+
         // Extract and save images, get markdown with references
-        let markdown = try convertToMarkdown(title: title, attributedContent: attributedContent, mediaURL: mediaURL)
+        let markdown = try convertToMarkdown(title: title, attributedContent: attributedContent, mediaURL: mediaURL, noteUUID: noteUUID)
 
         // Write markdown file
         try markdown.write(to: fileURL, atomically: true, encoding: .utf8)
@@ -212,11 +216,30 @@ class FileSystemManager {
 
     /// Generate filename from title using YYYY MMM DD [Title] format
     func generateFilename(from title: String) -> String {
+        // Generate UUID timestamp: YYMMDD.HHMMSS
+        let now = Date()
         let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy MMM dd"
-        let dateString = dateFormatter.string(from: Date())
+        dateFormatter.dateFormat = "yyMMdd.HHmmss"
+        let uuid = dateFormatter.string(from: now)
+
+        // Generate human-readable date
+        let readableDateFormatter = DateFormatter()
+        readableDateFormatter.dateFormat = "yyyy MMM dd"
+        let dateString = readableDateFormatter.string(from: now)
 
         let cleanTitle = title.isEmpty ? "Untitled" : title
-        return "\(dateString) [\(cleanTitle)].md"
+        return "(\(uuid)) \(dateString) \(cleanTitle).md"
+    }
+
+    /// Extract UUID from filename (returns nil if not UUID format)
+    func extractUUID(from filename: String) -> String? {
+        // Match pattern: (YYMMDD.HHMMSS)
+        let pattern = "^\\((\\d{6}\\.\\d{6})\\)"
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: filename, range: NSRange(filename.startIndex..., in: filename)),
+              let range = Range(match.range(at: 1), in: filename) else {
+            return nil
+        }
+        return String(filename[range])
     }
 }

@@ -19,6 +19,7 @@ struct NotebookPickerView: View {
     @State private var groupByTags = false  // Toggle for section view
     @State private var showCreateSectionSheet = false
     @State private var newSectionName = ""
+    @State private var editMode: EditMode = .inactive
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -126,6 +127,11 @@ struct NotebookPickerView: View {
                     }
                 }
 
+                ToolbarItem(placement: .topBarLeading) {
+                    EditButton()
+                        .environment(\.editMode, $editMode)
+                }
+
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         rebuildIndex()
@@ -134,6 +140,7 @@ struct NotebookPickerView: View {
                     }
                 }
             }
+            .environment(\.editMode, $editMode)
             .onAppear {
                 loadIndex()
             }
@@ -317,6 +324,12 @@ struct NotebookPickerView: View {
                     showMetadataEditor = true
                 }
             )
+        }
+        .onDelete { indexSet in
+            deleteNotebooks(at: indexSet, from: index)
+        }
+        .onMove { from, to in
+            moveNotebooks(from: from, to: to, in: index)
         }
     }
 
@@ -593,6 +606,54 @@ struct NotebookCard: View {
         case "yellow": return .yellow
         case "gray": return .gray
         default: return .blue
+        }
+    }
+
+    // MARK: - Edit Mode Actions
+
+    private func deleteNotebooks(at offsets: IndexSet, from index: LibraryIndex) {
+        guard let parentURL = getParentLibraryURL() else { return }
+
+        // Get notebooks to delete
+        let notebooksToDelete = offsets.map { index.notebooks[$0] }
+
+        do {
+            // Delete each notebook folder
+            for notebook in notebooksToDelete {
+                let notebookURL = parentURL.appendingPathComponent(notebook.id)
+                try FileManager.default.removeItem(at: notebookURL)
+                print("Deleted notebook: \(notebook.displayName)")
+            }
+
+            // Rebuild index after deletion
+            try indexManager.rebuildLibraryIndex(libraryURL: parentURL)
+            libraryIndex = try indexManager.loadLibraryIndex(libraryURL: parentURL)
+        } catch {
+            print("Failed to delete notebooks: \(error)")
+        }
+    }
+
+    private func moveNotebooks(from source: IndexSet, to destination: Int, in index: LibraryIndex) {
+        guard let parentURL = getParentLibraryURL() else { return }
+
+        // Create mutable copy of notebooks array
+        var updatedNotebooks = index.notebooks
+
+        // Perform the move
+        updatedNotebooks.move(fromOffsets: source, toOffset: destination)
+
+        // Update the library index with new order
+        var updatedIndex = index
+        updatedIndex.notebooks = updatedNotebooks
+        updatedIndex.lastModified = Date()
+
+        do {
+            // Save the reordered index
+            try indexManager.saveLibraryIndex(updatedIndex, to: parentURL)
+            libraryIndex = updatedIndex
+            print("Reordered notebooks")
+        } catch {
+            print("Failed to reorder notebooks: \(error)")
         }
     }
 }
